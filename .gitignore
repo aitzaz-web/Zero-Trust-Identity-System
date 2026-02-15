@@ -1,0 +1,17 @@
+/bin/
+# CA keys/secrets - keep out of git
+ca/*.key
+ca/issued/
+# Trust bundle and CRL can be committed for demo; keys must not
+*.pyc
+__pycache__/
+.DS_Store
+*.log
+*.jar
+target/
+.idea/
+.vscode/
+*.swp
+*.swo
+.env
+.env.local

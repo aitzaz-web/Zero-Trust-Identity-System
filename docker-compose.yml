@@ -1,0 +1,98 @@
+services:
+  # Registration Authority API
+  ra:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.ra
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./ca:/app/ca:ro
+    environment:
+      - CA_DIR=/app/ca
+      - RA_PORT=8443
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8443/v1/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # CRL Publisher
+  # CRL file must exist; ztca or init creates empty CRL
+  crl-publisher:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.crl
+    ports:
+      - "8444:8444"
+    volumes:
+      - ./ca:/app/ca:ro
+    environment:
+      - CRL_PORT=8444
+      - CRL_PATH=/app/ca/crl.pem
+    depends_on:
+      - ra
+
+  # Agent + Service-A (C++)
+  agent-a:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.agent
+    environment:
+      - SERVICE_ID=service-a
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN_A}
+      - RA_URL=http://ra:8443
+      - CERT_DIR=/certs
+    volumes:
+      - certs-a:/certs
+    depends_on:
+      ra:
+        condition: service_healthy
+
+  # Service-A shares cert volume with agent-a; start after agent has written certs
+  service-a:
+    build:
+      context: ./services/service-a
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - certs-a:/certs:ro
+    # Wait for agent to fetch certs; agent writes to shared volume
+    environment:
+      - CERT_PATH=/certs/cert.pem
+      - KEY_PATH=/certs/key.pem
+      - CA_PATH=/certs/chain.pem
+    depends_on:
+      - agent-a
+
+  # Agent + Service-B (Java)
+  agent-b:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.agent
+    environment:
+      - SERVICE_ID=service-b
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN_B}
+      - RA_URL=http://ra:8443
+      - CERT_DIR=/certs
+    volumes:
+      - certs-b:/certs
+    depends_on:
+      ra:
+        condition: service_healthy
+
+  service-b:
+    build:
+      context: ./services/service-b
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    volumes:
+      - certs-b:/certs:ro
+    depends_on:
+      - agent-b
+
+volumes:
+  certs-a:
+  certs-b:

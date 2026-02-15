@@ -1,0 +1,12 @@
+FROM golang:1.21-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o crl-publisher ./cmd/crl-publisher
+
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /app/crl-publisher /crl-publisher
+EXPOSE 8444
+CMD ["/crl-publisher"]
