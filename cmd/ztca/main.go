@@ -4,9 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 
 	"github.com/zero-trust/zt-identity/pkg/ca"
+	"github.com/zero-trust/zt-identity/pkg/health"
 )
 
 const defaultCADir = "ca"
@@ -22,6 +25,8 @@ func main() {
 	switch cmd {
 	case "init":
 		runInit()
+	case "serve":
+		runServe(args)
 	case "register":
 		if len(args) < 1 {
 			fmt.Fprintln(os.Stderr, "usage: ztca register <service>")
@@ -114,6 +119,19 @@ func runStatus() {
 	// TODO: call RA API for status
 	fmt.Println("Active certs: (RA integration pending)")
 	fmt.Println("Revoked: (RA integration pending)")
+}
+
+func runServe(args []string) {
+	port := "8080"
+	if len(args) >= 1 && args[0] != "" {
+		port = args[0]
+	}
+	addr := ":" + port
+	http.HandleFunc("/healthz", health.HealthHandler)
+	log.Printf("ztca serving health endpoint on %s/healthz", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("serve failed: %v", err)
+	}
 }
 
 func randomHex(n int) string {
